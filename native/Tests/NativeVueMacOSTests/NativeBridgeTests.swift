@@ -14,6 +14,7 @@ final class NativeBridgeTests: XCTestCase {
             ("mac-z-stack", NSView.self),
             ("mac-scroll-view", NSScrollView.self),
             ("mac-text", NSTextField.self),
+            ("mac-gradient-text", GradientTextField.self),
             ("mac-button", NSButton.self),
             ("mac-text-field", NSTextField.self),
             ("mac-secure-field", NSSecureTextField.self),
@@ -27,6 +28,27 @@ final class NativeBridgeTests: XCTestCase {
             XCTAssertGreaterThan(id, 0, tag)
             XCTAssertTrue(bridge.viewForTesting(id)?.isKind(of: type) == true, tag)
         }
+    }
+
+    @MainActor
+    func testPresentationStylesUsedByWebsiteDemo() throws {
+        _ = NSApplication.shared
+        let context = JSContext()!
+        let bridge = NativeBridge()
+        let title = bridge.createNode("mac-gradient-text")
+        let button = bridge.createNode("mac-button")
+
+        XCTAssertTrue(bridge.setStyle(title, "fontWeight", JSValue(object: "900", in: context)))
+        XCTAssertTrue(bridge.setStyle(title, "gradientStartColor", JSValue(object: "#42D392", in: context)))
+        XCTAssertTrue(bridge.setStyle(title, "gradientEndColor", JSValue(object: "#647EFF", in: context)))
+        XCTAssertTrue(bridge.setProp(button, "bordered", JSValue(bool: false, in: context)))
+        XCTAssertTrue(bridge.setStyle(button, "cornerRadius", JSValue(double: 8, in: context)))
+        XCTAssertTrue(bridge.setStyle(button, "borderWidth", JSValue(double: 2, in: context)))
+        XCTAssertTrue(bridge.setStyle(button, "borderColor", JSValue(object: "#42B883", in: context)))
+
+        XCTAssertFalse((bridge.viewForTesting(button) as? NSButton)?.isBordered ?? true)
+        XCTAssertEqual(bridge.viewForTesting(button)?.layer?.cornerRadius, 8)
+        XCTAssertEqual(bridge.viewForTesting(button)?.layer?.borderWidth, 2)
     }
 
     @MainActor

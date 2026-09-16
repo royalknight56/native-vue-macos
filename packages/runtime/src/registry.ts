@@ -43,6 +43,7 @@ const builtins: Array<[string, NativeElementDescriptor?]> = [
   ['mac-scroll-view'],
   ['mac-spacer'],
   ['mac-text'],
+  ['mac-gradient-text'],
   ['mac-button'],
   ['mac-text-field', { model: { prop: 'value', event: 'input', eventValue: 'value' } }],
   ['mac-secure-field', { model: { prop: 'value', event: 'input', eventValue: 'value' } }],

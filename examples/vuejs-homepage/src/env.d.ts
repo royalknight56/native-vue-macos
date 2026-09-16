@@ -11,12 +11,9 @@ declare module 'vue' {
     MacText: unknown
     MacGradientText: unknown
     MacButton: unknown
-    MacTextField: unknown
-    MacSecureField: unknown
-    MacToggle: unknown
-    MacProgress: unknown
     MacDivider: unknown
     MacImage: unknown
+    MacTextField: unknown
   }
 }
 

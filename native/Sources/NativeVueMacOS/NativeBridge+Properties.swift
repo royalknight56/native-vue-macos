@@ -4,7 +4,7 @@ import JavaScriptCore
 @MainActor
 extension NativeBridge {
     func applyProperty(node: NativeNode, name: String, value: JSValue) throws {
-        if ["width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight", "opacity", "hidden", "backgroundColor", "color", "fontSize", "fontWeight", "padding", "spacing", "alignment"].contains(name) {
+        if ["width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight", "opacity", "hidden", "backgroundColor", "color", "fontSize", "fontWeight", "padding", "spacing", "alignment", "cornerRadius", "borderWidth", "borderColor", "gradientStartColor", "gradientEndColor"].contains(name) {
             try applyStyle(node: node, name: name, value: value)
             return
         }
@@ -27,10 +27,40 @@ extension NativeBridge {
             if let size = number(value), let window = node.window {
                 window.setContentSize(NSSize(width: window.contentLayoutRect.width, height: size))
             }
-        case ("mac-text", "text"), ("mac-button", "title"):
+        case ("mac-text", "text"), ("mac-gradient-text", "text"), ("mac-button", "title"):
             guard setText(node.id, string(value) ?? "") else { throw propertyError(node, name) }
-        case ("mac-text", "selectable"):
+        case ("mac-text", "selectable"), ("mac-gradient-text", "selectable"):
             (node.view as? NSTextField)?.isSelectable = boolean(value)
+        case ("mac-text", "numberOfLines"), ("mac-gradient-text", "numberOfLines"):
+            (node.view as? NSTextField)?.maximumNumberOfLines = Int(number(value) ?? 1)
+        case ("mac-text", "textAlignment"), ("mac-gradient-text", "textAlignment"):
+            guard let field = node.view as? NSTextField else { throw propertyError(node, name) }
+            switch string(value) {
+            case nil, "natural": field.alignment = .natural
+            case "left", "leading": field.alignment = .left
+            case "center": field.alignment = .center
+            case "right", "trailing": field.alignment = .right
+            default: throw propertyError(node, name, "expected leading, center, or trailing")
+            }
+        case ("mac-text", "lineBreakMode"), ("mac-gradient-text", "lineBreakMode"):
+            guard let field = node.view as? NSTextField else { throw propertyError(node, name) }
+            switch string(value) {
+            case nil, "truncateTail": field.lineBreakMode = .byTruncatingTail
+            case "wordWrap": field.lineBreakMode = .byWordWrapping
+            case "charWrap": field.lineBreakMode = .byCharWrapping
+            default: throw propertyError(node, name, "expected truncateTail, wordWrap, or charWrap")
+            }
+        case ("mac-button", "bordered"):
+            (node.view as? NSButton)?.isBordered = boolean(value, default: true)
+        case ("mac-button", "bezelStyle"):
+            guard let button = node.view as? NSButton else { throw propertyError(node, name) }
+            switch string(value) {
+            case nil, "rounded": button.bezelStyle = .rounded
+            case "regularSquare": button.bezelStyle = .regularSquare
+            case "recessed": button.bezelStyle = .recessed
+            case "texturedRounded": button.bezelStyle = .texturedRounded
+            default: throw propertyError(node, name, "unsupported bezel style")
+            }
         case ("mac-button", "enabled"), ("mac-text-field", "enabled"), ("mac-secure-field", "enabled"), ("mac-toggle", "enabled"):
             (node.view as? NSControl)?.isEnabled = boolean(value, default: true)
         case ("mac-text-field", "value"), ("mac-secure-field", "value"):
@@ -61,6 +91,13 @@ extension NativeBridge {
             case "center": image?.imageScaling = .scaleNone
             default: throw propertyError(node, name, "expected fill, fit, or center")
             }
+        case ("mac-image", "template"):
+            guard let imageView = node.view as? NSImageView else { throw propertyError(node, name) }
+            if let copy = imageView.image?.copy() as? NSImage {
+                copy.isTemplate = boolean(value)
+                imageView.image = copy
+                imageView.needsDisplay = true
+            }
         case (_, "toolTip"):
             node.view?.toolTip = string(value)
         case (_, "accessibilityLabel"):
@@ -86,7 +123,8 @@ extension NativeBridge {
             let parsed = try color(value)
             if let field = view as? NSTextField { field.textColor = parsed }
             else if let control = view as? NSButton { control.contentTintColor = parsed }
-            else { throw propertyError(node, name, "only text and controls support foreground color") }
+            else if let image = view as? NSImageView { image.contentTintColor = parsed }
+            else { throw propertyError(node, name, "only text, controls, and images support foreground color") }
         case "fontSize":
             guard let control = view as? NSControl else { throw propertyError(node, name, "only controls support fonts") }
             let size = number(value) ?? NSFont.systemFontSize
@@ -104,6 +142,26 @@ extension NativeBridge {
         case "alignment":
             guard let stack = view as? NSStackView else { throw propertyError(node, name, "only stack containers support alignment") }
             stack.alignment = try alignment(string(value), orientation: stack.orientation)
+        case "cornerRadius":
+            view.wantsLayer = true
+            view.layer?.cornerRadius = number(value) ?? 0
+            view.layer?.masksToBounds = true
+        case "borderWidth":
+            view.wantsLayer = true
+            view.layer?.borderWidth = number(value) ?? 0
+        case "borderColor":
+            view.wantsLayer = true
+            view.layer?.borderColor = try color(value)?.cgColor
+        case "gradientStartColor":
+            guard let field = view as? GradientTextField, let parsed = try color(value) else {
+                throw propertyError(node, name, "only gradient text supports gradient colors")
+            }
+            field.gradientStartColor = parsed
+        case "gradientEndColor":
+            guard let field = view as? GradientTextField, let parsed = try color(value) else {
+                throw propertyError(node, name, "only gradient text supports gradient colors")
+            }
+            field.gradientEndColor = parsed
         default:
             throw propertyError(node, name, "unsupported native style")
         }
@@ -197,6 +255,8 @@ extension NativeBridge {
         case "medium", "500": return .medium
         case "semibold", "600": return .semibold
         case "bold", "700": return .bold
+        case "heavy", "800": return .heavy
+        case "black", "900": return .black
         default: throw NSError.nativeVue("Unsupported font weight \(string(value) ?? "")")
         }
     }

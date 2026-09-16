@@ -1,0 +1,22 @@
+{
+  "name": "@native-vue-macos/vuejs-homepage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx ../../packages/compiler/src/cli.ts dev",
+    "build": "tsx ../../packages/compiler/src/cli.ts build",
+    "package": "npm run build && node ../../scripts/package-example.mjs vuejs-homepage VueWebsiteDemo dev.native-vue-macos.vuejs-demo",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@native-vue-macos/runtime": "0.1.0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@native-vue-macos/compiler": "0.1.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vue-tsc": "^3.0.0"
+  }
+}

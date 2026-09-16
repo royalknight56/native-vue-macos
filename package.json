@@ -15,9 +15,12 @@
     "build": "npm run build --workspace @native-vue-macos/showcase",
     "dev": "npm run dev --workspace @native-vue-macos/showcase",
     "package": "npm run build && node scripts/package-app.mjs",
+    "demo:vue:dev": "npm run dev --workspace @native-vue-macos/vuejs-homepage",
+    "demo:vue:build": "npm run build --workspace @native-vue-macos/vuejs-homepage",
+    "demo:vue:package": "npm run package --workspace @native-vue-macos/vuejs-homepage",
     "test": "npm run test:ts && node scripts/swift-test.mjs",
     "test:ts": "vitest run",
-    "typecheck": "tsc -b packages/runtime packages/compiler examples/showcase",
+    "typecheck": "tsc -b packages/runtime packages/compiler examples/showcase examples/vuejs-homepage",
     "clean": "node scripts/clean.mjs"
   },
   "devDependencies": {

@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/runtime" },
     { "path": "./packages/compiler" },
-    { "path": "./examples/showcase" }
+    { "path": "./examples/showcase" },
+    { "path": "./examples/vuejs-homepage" }
   ]
 }

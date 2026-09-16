@@ -56,6 +56,7 @@ public final class NativeElementFactoryRegistry {
             return view
         }
         register("mac-text") { NSTextField(labelWithString: "") }
+        register("mac-gradient-text") { GradientTextField() }
         register("mac-button") { NSButton(title: "", target: nil, action: nil) }
         register("mac-text-field") { NSTextField() }
         register("mac-secure-field") { NSSecureTextField() }
