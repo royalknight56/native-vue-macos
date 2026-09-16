@@ -2,7 +2,7 @@ import { defineComponent, h, type Component } from 'vue'
 import './hmr'
 
 export { createNativeApp as createApp, disposeApplication, nativeRenderer } from './renderer'
-export { registerElement, isKnownElement } from './registry'
+export { registerElement, isKnownElement, builtInNativeElements } from './registry'
 export { installBridgeForTesting, type NativeBridge, type NativeValue } from './bridge'
 export { NativeNode } from './node'
 export {

@@ -25,6 +25,7 @@ public final class NativeElementFactoryRegistry {
     }
 
     private func installDefaults() {
+        register("mac-view") { FlippedView() }
         register("mac-v-stack") {
             let view = NativeStackView()
             view.orientation = .vertical
@@ -81,6 +82,55 @@ public final class NativeElementFactoryRegistry {
             image.imageScaling = .scaleProportionallyUpOrDown
             return image
         }
+
+        installStandardAppKitElements()
+    }
+
+    /// Registers every public, non-deprecated AppKit view/control that can be
+    /// represented as a standalone Vue node on the macOS 13 deployment target.
+    /// Controller, cell, menu and data-source objects deliberately stay outside
+    /// this registry because they are not views in AppKit's ownership model.
+    private func installStandardAppKitElements() {
+        register("mac-box") { NSBox() }
+        register("mac-clip-view") { NSClipView() }
+        register("mac-split-view") { NSSplitView() }
+        register("mac-tab-view") { NSTabView() }
+        register("mac-grid-view") { NSGridView(frame: .zero) }
+        register("mac-visual-effect-view") { NSVisualEffectView() }
+        register("mac-scroller") { NSScroller() }
+        register("mac-ruler-view") {
+            NSRulerView(scrollView: NSScrollView(), orientation: .horizontalRuler)
+        }
+
+        register("mac-radio") { NSButton(radioButtonWithTitle: "", target: nil, action: nil) }
+        register("mac-switch") { NSSwitch() }
+        register("mac-text-view") { NSTextView() }
+        register("mac-search-field") { NSSearchField() }
+        register("mac-token-field") { NSTokenField() }
+        register("mac-combo-box") { NSComboBox() }
+        register("mac-pop-up-button") { NSPopUpButton() }
+        register("mac-segmented-control") { NSSegmentedControl(labels: [], trackingMode: .selectOne, target: nil, action: nil) }
+        register("mac-combo-button") { NSComboButton(title: "", menu: nil, target: nil, action: nil) }
+        register("mac-slider") { NSSlider() }
+        register("mac-stepper") { NSStepper() }
+        register("mac-level-indicator") { NSLevelIndicator() }
+        register("mac-date-picker") { NSDatePicker() }
+        register("mac-color-well") { NSColorWell() }
+        register("mac-path-control") { NSPathControl() }
+
+        register("mac-table-view") { NSTableView() }
+        register("mac-outline-view") { NSOutlineView() }
+        register("mac-collection-view") {
+            let view = NSCollectionView()
+            view.collectionViewLayout = NSCollectionViewFlowLayout()
+            return view
+        }
+        register("mac-browser") { NSBrowser() }
+        register("mac-rule-editor") { NSRuleEditor() }
+        register("mac-scrubber") { NSScrubber() }
+        register("mac-table-row-view") { NSTableRowView() }
+        register("mac-table-cell-view") { NSTableCellView() }
+        register("mac-table-header-view") { NSTableHeaderView() }
     }
 }
 

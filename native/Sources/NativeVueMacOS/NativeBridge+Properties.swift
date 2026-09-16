@@ -106,18 +106,87 @@ extension NativeBridge {
             case "right", "trailing": button.alignment = .right
             default: throw propertyError(node, name, "expected leading, center, or trailing")
             }
-        case ("mac-button", "enabled"), ("mac-text-field", "enabled"), ("mac-secure-field", "enabled"), ("mac-toggle", "enabled"):
+        case (_, "enabled") where node.view is NSControl:
             let enabled = boolean(value, default: true)
             (node.view as? NSControl)?.isEnabled = enabled
             setNativeState(nodeID: node.id, state: "disabled", active: !enabled)
-        case ("mac-text-field", "value"), ("mac-secure-field", "value"):
+        case ("mac-text-field", "value"), ("mac-secure-field", "value"), ("mac-search-field", "value"),
+             ("mac-token-field", "value"), ("mac-combo-box", "value"):
             (node.view as? NSTextField)?.stringValue = string(value) ?? ""
-        case ("mac-text-field", "placeholder"), ("mac-secure-field", "placeholder"):
+        case ("mac-text-field", "placeholder"), ("mac-secure-field", "placeholder"), ("mac-search-field", "placeholder"),
+             ("mac-token-field", "placeholder"), ("mac-combo-box", "placeholder"):
             (node.view as? NSTextField)?.placeholderString = string(value)
-        case ("mac-toggle", "checked"):
+        case ("mac-text-view", "value"):
+            (node.view as? NSTextView)?.string = string(value) ?? ""
+        case ("mac-text-view", "editable"):
+            (node.view as? NSTextView)?.isEditable = boolean(value, default: true)
+        case ("mac-toggle", "checked"), ("mac-radio", "checked"):
             (node.view as? NSButton)?.state = boolean(value) ? .on : .off
-        case ("mac-toggle", "label"), ("mac-toggle", "title"):
+        case ("mac-toggle", "label"), ("mac-toggle", "title"), ("mac-radio", "label"), ("mac-radio", "title"):
             (node.view as? NSButton)?.title = string(value) ?? ""
+        case ("mac-switch", "checked"):
+            (node.view as? NSSwitch)?.state = boolean(value) ? .on : .off
+        case ("mac-combo-box", "items"):
+            guard let combo = node.view as? NSComboBox, let items = value.toArray() as? [String] else {
+                throw propertyError(node, name, "expected a string array")
+            }
+            combo.removeAllItems(); combo.addItems(withObjectValues: items)
+        case ("mac-pop-up-button", "items"):
+            guard let popup = node.view as? NSPopUpButton, let items = value.toArray() as? [String] else {
+                throw propertyError(node, name, "expected a string array")
+            }
+            popup.removeAllItems(); popup.addItems(withTitles: items)
+        case ("mac-pop-up-button", "selectedIndex"):
+            (node.view as? NSPopUpButton)?.selectItem(at: Int(number(value) ?? -1))
+        case ("mac-segmented-control", "labels"):
+            guard let segmented = node.view as? NSSegmentedControl, let labels = value.toArray() as? [String] else {
+                throw propertyError(node, name, "expected a string array")
+            }
+            segmented.segmentCount = labels.count
+            for (index, label) in labels.enumerated() { segmented.setLabel(label, forSegment: index) }
+        case ("mac-segmented-control", "selectedIndex"):
+            (node.view as? NSSegmentedControl)?.selectedSegment = Int(number(value) ?? -1)
+        case ("mac-combo-button", "title"):
+            (node.view as? NSComboButton)?.title = string(value) ?? ""
+        case ("mac-slider", "value"), ("mac-stepper", "value"), ("mac-level-indicator", "value"):
+            (node.view as? NSControl)?.doubleValue = Double(number(value) ?? 0)
+        case ("mac-slider", "min"), ("mac-stepper", "min"), ("mac-level-indicator", "min"):
+            if let control = node.view as? NSSlider { control.minValue = Double(number(value) ?? 0) }
+            else if let control = node.view as? NSStepper { control.minValue = Double(number(value) ?? 0) }
+            else { (node.view as? NSLevelIndicator)?.minValue = Double(number(value) ?? 0) }
+        case ("mac-slider", "max"), ("mac-stepper", "max"), ("mac-level-indicator", "max"):
+            if let control = node.view as? NSSlider { control.maxValue = Double(number(value) ?? 100) }
+            else if let control = node.view as? NSStepper { control.maxValue = Double(number(value) ?? 100) }
+            else { (node.view as? NSLevelIndicator)?.maxValue = Double(number(value) ?? 100) }
+        case ("mac-stepper", "increment"):
+            (node.view as? NSStepper)?.increment = Double(number(value) ?? 1)
+        case ("mac-date-picker", "value"):
+            guard let raw = string(value), let date = ISO8601DateFormatter().date(from: raw) else {
+                throw propertyError(node, name, "expected an ISO-8601 date string")
+            }
+            (node.view as? NSDatePicker)?.dateValue = date
+        case ("mac-color-well", "value"):
+            guard let parsed = try color(value) else { throw propertyError(node, name, "expected a color") }
+            (node.view as? NSColorWell)?.color = parsed
+        case ("mac-path-control", "value"):
+            let raw = string(value) ?? ""
+            (node.view as? NSPathControl)?.url = raw.isEmpty ? nil : URL(fileURLWithPath: raw)
+        case ("mac-box", "title"):
+            (node.view as? NSBox)?.title = string(value) ?? ""
+        case ("mac-split-view", "vertical"):
+            (node.view as? NSSplitView)?.isVertical = boolean(value, default: true)
+        case ("mac-scroll-view", "hasVerticalScroller"):
+            (node.view as? NSScrollView)?.hasVerticalScroller = boolean(value, default: true)
+        case ("mac-scroll-view", "hasHorizontalScroller"):
+            (node.view as? NSScrollView)?.hasHorizontalScroller = boolean(value)
+        case ("mac-scroller", "value"):
+            (node.view as? NSScroller)?.doubleValue = Double(number(value) ?? 0)
+        case ("mac-scroller", "knobProportion"):
+            (node.view as? NSScroller)?.knobProportion = number(value) ?? 0
+        case ("mac-table-view", "rowHeight"), ("mac-outline-view", "rowHeight"):
+            (node.view as? NSTableView)?.rowHeight = number(value) ?? 17
+        case ("mac-table-view", "alternatingRows"), ("mac-outline-view", "alternatingRows"):
+            (node.view as? NSTableView)?.usesAlternatingRowBackgroundColors = boolean(value)
         case ("mac-progress", "value"):
             (node.view as? NSProgressIndicator)?.doubleValue = number(value) ?? 0
         case ("mac-progress", "min"):

@@ -9,6 +9,7 @@ final class NativeBridgeTests: XCTestCase {
         _ = NSApplication.shared
         let bridge = NativeBridge()
         let expected: [(String, NSView.Type)] = [
+            ("mac-view", NSView.self),
             ("mac-v-stack", NSStackView.self),
             ("mac-h-stack", NSStackView.self),
             ("mac-z-stack", NSView.self),
@@ -21,7 +22,39 @@ final class NativeBridgeTests: XCTestCase {
             ("mac-toggle", NSButton.self),
             ("mac-progress", NSProgressIndicator.self),
             ("mac-divider", NSBox.self),
-            ("mac-image", NSImageView.self)
+            ("mac-image", NSImageView.self),
+            ("mac-box", NSBox.self),
+            ("mac-clip-view", NSClipView.self),
+            ("mac-split-view", NSSplitView.self),
+            ("mac-tab-view", NSTabView.self),
+            ("mac-grid-view", NSGridView.self),
+            ("mac-visual-effect-view", NSVisualEffectView.self),
+            ("mac-scroller", NSScroller.self),
+            ("mac-ruler-view", NSRulerView.self),
+            ("mac-radio", NSButton.self),
+            ("mac-switch", NSSwitch.self),
+            ("mac-text-view", NSTextView.self),
+            ("mac-search-field", NSSearchField.self),
+            ("mac-token-field", NSTokenField.self),
+            ("mac-combo-box", NSComboBox.self),
+            ("mac-pop-up-button", NSPopUpButton.self),
+            ("mac-segmented-control", NSSegmentedControl.self),
+            ("mac-combo-button", NSComboButton.self),
+            ("mac-slider", NSSlider.self),
+            ("mac-stepper", NSStepper.self),
+            ("mac-level-indicator", NSLevelIndicator.self),
+            ("mac-date-picker", NSDatePicker.self),
+            ("mac-color-well", NSColorWell.self),
+            ("mac-path-control", NSPathControl.self),
+            ("mac-table-view", NSTableView.self),
+            ("mac-outline-view", NSOutlineView.self),
+            ("mac-collection-view", NSCollectionView.self),
+            ("mac-browser", NSBrowser.self),
+            ("mac-rule-editor", NSRuleEditor.self),
+            ("mac-scrubber", NSScrubber.self),
+            ("mac-table-row-view", NSTableRowView.self),
+            ("mac-table-cell-view", NSTableCellView.self),
+            ("mac-table-header-view", NSTableHeaderView.self)
         ]
         for (tag, type) in expected {
             let id = bridge.createNode(tag)
@@ -54,6 +87,34 @@ final class NativeBridgeTests: XCTestCase {
         XCTAssertEqual((bridge.viewForTesting(button) as? NSButton)?.alignment, .left)
         XCTAssertEqual(bridge.viewForTesting(button)?.layer?.cornerRadius, 8)
         XCTAssertEqual(bridge.viewForTesting(button)?.layer?.borderWidth, 2)
+    }
+
+    @MainActor
+    func testStandardControlsExposeTypedProperties() throws {
+        _ = NSApplication.shared
+        let context = JSContext()!
+        let bridge = NativeBridge()
+        let sliderID = bridge.createNode("mac-slider")
+        let popupID = bridge.createNode("mac-pop-up-button")
+        let segmentsID = bridge.createNode("mac-segmented-control")
+        let switchID = bridge.createNode("mac-switch")
+
+        XCTAssertTrue(bridge.setProp(sliderID, "min", JSValue(double: 10, in: context)))
+        XCTAssertTrue(bridge.setProp(sliderID, "max", JSValue(double: 90, in: context)))
+        XCTAssertTrue(bridge.setProp(sliderID, "value", JSValue(double: 42, in: context)))
+        XCTAssertEqual((bridge.viewForTesting(sliderID) as? NSSlider)?.doubleValue, 42)
+
+        XCTAssertTrue(bridge.setProp(popupID, "items", JSValue(object: ["One", "Two"], in: context)))
+        XCTAssertTrue(bridge.setProp(popupID, "selectedIndex", JSValue(int32: 1, in: context)))
+        XCTAssertEqual((bridge.viewForTesting(popupID) as? NSPopUpButton)?.titleOfSelectedItem, "Two")
+
+        XCTAssertTrue(bridge.setProp(segmentsID, "labels", JSValue(object: ["Code", "Design"], in: context)))
+        XCTAssertTrue(bridge.setProp(segmentsID, "selectedIndex", JSValue(int32: 0, in: context)))
+        XCTAssertEqual((bridge.viewForTesting(segmentsID) as? NSSegmentedControl)?.label(forSegment: 1), "Design")
+
+        XCTAssertTrue(bridge.setProp(switchID, "checked", JSValue(bool: true, in: context)))
+        XCTAssertTrue(bridge.addEventListener(switchID, "change", 7))
+        XCTAssertEqual((bridge.viewForTesting(switchID) as? NSSwitch)?.state, .on)
     }
 
     @MainActor

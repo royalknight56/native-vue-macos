@@ -4,6 +4,7 @@ import { installBridgeForTesting, type NativeBridge, type NativeValue } from '..
 import { NativeNode } from '../src/node'
 import { nativeRenderer } from '../src/renderer'
 import { hmrManager } from '../src/hmr'
+import { builtInNativeElements, getElementDescriptor, isKnownElement } from '../src/registry'
 
 class FakeBridge implements NativeBridge {
   nextId = 1
@@ -28,6 +29,13 @@ class FakeBridge implements NativeBridge {
 }
 
 describe('native renderer', () => {
+  it('publishes the complete macOS 13 AppKit element catalog', () => {
+    expect(builtInNativeElements).toHaveLength(48)
+    for (const [tag] of builtInNativeElements) expect(isKnownElement(tag), tag).toBe(true)
+    expect(getElementDescriptor('mac-slider').model).toEqual({ prop: 'value', event: 'change', eventValue: 'value' })
+    expect(getElementDescriptor('mac-color-well').model?.eventValue).toBe('value')
+  })
+
   it('inserts, patches and removes native nodes', () => {
     const bridge = new FakeBridge()
     installBridgeForTesting(bridge)

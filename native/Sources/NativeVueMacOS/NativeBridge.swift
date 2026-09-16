@@ -140,6 +140,8 @@ public final class NativeBridge: NSObject, NativeBridgeExports {
                 refreshTextAppearance(node)
             } else if let button = node.view as? NSButton {
                 button.title = value
+            } else if let textView = node.view as? NSTextView {
+                textView.string = value
             } else {
                 throw failure("<\(node.type)> does not support text content")
             }
@@ -297,23 +299,29 @@ public final class NativeBridge: NSObject, NativeBridgeExports {
     private func attachEventProxy(to node: NativeNode) {
         let proxy = node.actionProxy ?? NativeEventProxy(bridge: self, nodeID: node.id, nodeType: node.type)
         node.actionProxy = proxy
-        if let button = node.view as? NSButton {
-            button.target = proxy
-            button.action = #selector(NativeEventProxy.activate(_:))
+        if let control = node.view as? NSControl {
+            control.target = proxy
+            control.action = #selector(NativeEventProxy.activate(_:))
         }
-        if let field = node.view as? NSTextField, node.type == "mac-text-field" || node.type == "mac-secure-field" {
+        if let field = node.view as? NSTextField,
+           ["mac-text-field", "mac-secure-field", "mac-search-field", "mac-token-field", "mac-combo-box"].contains(node.type) {
             field.delegate = proxy
             field.target = proxy
             field.action = #selector(NativeEventProxy.submit(_:))
         }
+        if let textView = node.view as? NSTextView { textView.delegate = proxy }
     }
 
     private func supportedEvents(for node: NativeNode) -> Set<String> {
         var events: Set<String>
         switch node.type {
-        case "mac-button": events = ["click"]
-        case "mac-toggle": events = ["change", "click"]
-        case "mac-text-field", "mac-secure-field": events = ["input", "change", "submit", "focus", "blur"]
+        case "mac-button", "mac-combo-button": events = ["click"]
+        case "mac-toggle", "mac-radio": events = ["change", "click"]
+        case "mac-switch", "mac-pop-up-button", "mac-segmented-control", "mac-slider", "mac-stepper",
+             "mac-level-indicator", "mac-date-picker", "mac-color-well", "mac-path-control": events = ["change"]
+        case "mac-text-field", "mac-secure-field", "mac-search-field", "mac-token-field", "mac-combo-box":
+            events = ["input", "change", "submit", "focus", "blur"]
+        case "mac-text-view": events = ["input", "change", "focus", "blur"]
         default: events = []
         }
         if node.view is NativeStateTrackable { events.formUnion(["mouseenter", "mouseleave"]) }

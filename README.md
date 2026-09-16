@@ -45,9 +45,11 @@ open dist/NativeVueShowcase.app
 
 ## 支持的原生元素
 
-- 布局：`mac-window`、`mac-v-stack`、`mac-h-stack`、`mac-z-stack`、`mac-scroll-view`、`mac-spacer`
-- 控件：`mac-text`、`mac-button`、`mac-text-field`、`mac-secure-field`、`mac-toggle`、`mac-progress`、`mac-divider`、`mac-image`
-- 双向绑定：文本输入、密码输入和开关支持 `v-model`
+- 当前内置 48 个标签，覆盖 macOS 13 基线中可独立表示为 `NSView`/`NSControl` 的公开、非废弃 AppKit 可视控件。
+- 布局与材质：Window、View、Stack、Scroll、Box、Split、Tab、Grid、Visual Effect、Clip、Scroller、Ruler 等。
+- 输入与选择：Button、Radio、Switch、TextField、TextView、Search、Token、ComboBox、PopUp、Segmented、Slider、Stepper、Date、Color、Path 等。
+- 数据视图：Table、Outline、Collection、Browser、RuleEditor、Scrubber 以及公开的 Table 子视图。
+- `v-model` 覆盖文本、布尔、数值、索引、日期、颜色和路径值控件。
 - 事件：`click`、`mouseenter`、`mouseleave`、`input`、`change`、`submit`、`focus`、`blur`
 - 原生样式：StyleSheet、样式数组、class/id/标签选择器、scoped 样式、交互状态，以及尺寸、盒模型、Flex 风格布局、定位、字体、边框、阴影和变换
 
@@ -62,4 +64,4 @@ SFC 支持 `<style native scoped>`。没有 `native` 标记的浏览器 CSS、�
 - `native`：Swift Package，包含 JavaScriptCore Host 和 AppKit bridge
 - `examples/showcase`：覆盖全部首批控件的示例应用
 
-详细设计参见 [docs/architecture.md](docs/architecture.md)，样式系统参见 [docs/styling.md](docs/styling.md)，自定义原生控件参见 [docs/custom-elements.md](docs/custom-elements.md)。
+完整标签到 AppKit 类型的映射及边界参见 [docs/elements.md](docs/elements.md)。详细设计参见 [docs/architecture.md](docs/architecture.md)，样式系统参见 [docs/styling.md](docs/styling.md)，自定义原生控件参见 [docs/custom-elements.md](docs/custom-elements.md)。
