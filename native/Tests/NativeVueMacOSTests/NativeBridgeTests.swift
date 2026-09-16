@@ -42,11 +42,16 @@ final class NativeBridgeTests: XCTestCase {
         XCTAssertTrue(bridge.setStyle(title, "gradientStartColor", JSValue(object: "#42D392", in: context)))
         XCTAssertTrue(bridge.setStyle(title, "gradientEndColor", JSValue(object: "#647EFF", in: context)))
         XCTAssertTrue(bridge.setProp(button, "bordered", JSValue(bool: false, in: context)))
+        XCTAssertTrue(bridge.setProp(button, "systemImage", JSValue(object: "chevron.down", in: context)))
+        XCTAssertTrue(bridge.setProp(button, "textAlignment", JSValue(object: "left", in: context)))
         XCTAssertTrue(bridge.setStyle(button, "cornerRadius", JSValue(double: 8, in: context)))
         XCTAssertTrue(bridge.setStyle(button, "borderWidth", JSValue(double: 2, in: context)))
         XCTAssertTrue(bridge.setStyle(button, "borderColor", JSValue(object: "#42B883", in: context)))
 
         XCTAssertFalse((bridge.viewForTesting(button) as? NSButton)?.isBordered ?? true)
+        XCTAssertNotNil((bridge.viewForTesting(button) as? NSButton)?.image)
+        XCTAssertEqual((bridge.viewForTesting(button) as? NSButton)?.imagePosition, .imageTrailing)
+        XCTAssertEqual((bridge.viewForTesting(button) as? NSButton)?.alignment, .left)
         XCTAssertEqual(bridge.viewForTesting(button)?.layer?.cornerRadius, 8)
         XCTAssertEqual(bridge.viewForTesting(button)?.layer?.borderWidth, 2)
     }
@@ -118,6 +123,7 @@ final class NativeBridgeTests: XCTestCase {
         XCTAssertEqual(stack.contentViews.count, 1)
         XCTAssertEqual(stack.arrangedSubviews.count, 3)
         XCTAssertFalse(stack.contentViews.contains { $0 === bridge.viewForTesting(absoluteID) })
+        XCTAssertEqual(bridge.viewForTesting(absoluteID)?.constraints.count, 0)
 
         XCTAssertTrue(bridge.setStyle(absoluteID, "position", JSValue(object: "relative", in: context)))
         XCTAssertEqual(stack.contentViews.count, 2)
@@ -162,6 +168,13 @@ final class NativeBridgeTests: XCTestCase {
         let label = bridge.createNode("mac-text")
         XCTAssertFalse(bridge.setProp(label, "madeUp", JSValue(bool: true, in: context)))
         XCTAssertTrue(bridge.takeLastError()?.contains("Invalid property") == true)
+
+        let button = bridge.createNode("mac-button")
+        let stack = bridge.createNode("mac-v-stack")
+        XCTAssertTrue(bridge.addEventListener(button, "mouseenter", 1))
+        XCTAssertTrue(bridge.addEventListener(button, "mouseleave", 2))
+        XCTAssertTrue(bridge.addEventListener(stack, "mouseenter", 3))
+        XCTAssertTrue(bridge.addEventListener(stack, "mouseleave", 4))
     }
 
     @MainActor

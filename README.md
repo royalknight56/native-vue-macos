@@ -48,7 +48,7 @@ open dist/NativeVueShowcase.app
 - 布局：`mac-window`、`mac-v-stack`、`mac-h-stack`、`mac-z-stack`、`mac-scroll-view`、`mac-spacer`
 - 控件：`mac-text`、`mac-button`、`mac-text-field`、`mac-secure-field`、`mac-toggle`、`mac-progress`、`mac-divider`、`mac-image`
 - 双向绑定：文本输入、密码输入和开关支持 `v-model`
-- 事件：`click`、`input`、`change`、`submit`、`focus`、`blur`
+- 事件：`click`、`mouseenter`、`mouseleave`、`input`、`change`、`submit`、`focus`、`blur`
 - 原生样式：StyleSheet、样式数组、class/id/标签选择器、scoped 样式、交互状态，以及尺寸、盒模型、Flex 风格布局、定位、字体、边框、阴影和变换
 
 颜色接受 `#RRGGBB`、`#RRGGBBAA`，以及 `label`、`secondaryLabel`、`accent`、`windowBackground`、`controlBackground`、`separator` 等系统语义色。

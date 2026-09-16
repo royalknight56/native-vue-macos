@@ -72,8 +72,8 @@ public final class NativeBridge: NSObject, NativeBridgeExports {
                 guard let view = registry.makeView(for: type) else { throw failure("No factory registered for <\(type)>") }
                 let node = NativeNode(id: id, type: type, view: view)
                 nodes[id] = node
-                if let button = view as? NativeStyleButton {
-                    button.stateDidChange = { [weak self, weak node] state, active in
+                if let trackable = view as? NativeStateTrackable {
+                    trackable.stateDidChange = { [weak self, weak node] state, active in
                         guard let self, let node else { return }
                         self.setNativeState(nodeID: node.id, state: state, active: active)
                     }
@@ -116,7 +116,7 @@ public final class NativeBridge: NSObject, NativeBridgeExports {
                 } else {
                     parentView.addSubview(childView)
                 }
-                pinToContainerIfNeeded(childView, parent: parent)
+                if !isAbsolute { pinToContainerIfNeeded(childView, parent: parent) }
             }
             refreshLayoutAfterInsertion(child)
             return true
@@ -229,6 +229,9 @@ public final class NativeBridge: NSObject, NativeBridgeExports {
         guard let node = nodes[nodeID] else { return }
         if active { node.activeStates.insert(state) } else { node.activeStates.remove(state) }
         refreshStateAppearance(node)
+        if state == "hover" {
+            dispatch(nodeID: nodeID, event: active ? "mouseenter" : "mouseleave", payload: [:])
+        }
     }
 
     private func allocateID() -> Int {
@@ -306,11 +309,14 @@ public final class NativeBridge: NSObject, NativeBridgeExports {
     }
 
     private func supportedEvents(for node: NativeNode) -> Set<String> {
+        var events: Set<String>
         switch node.type {
-        case "mac-button": return ["click"]
-        case "mac-toggle": return ["change", "click"]
-        case "mac-text-field", "mac-secure-field": return ["input", "change", "submit", "focus", "blur"]
-        default: return []
+        case "mac-button": events = ["click"]
+        case "mac-toggle": events = ["change", "click"]
+        case "mac-text-field", "mac-secure-field": events = ["input", "change", "submit", "focus", "blur"]
+        default: events = []
         }
+        if node.view is NativeStateTrackable { events.formUnion(["mouseenter", "mouseleave"]) }
+        return events
     }
 }

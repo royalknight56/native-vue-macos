@@ -1,9 +1,34 @@
 import AppKit
 
 @MainActor
-final class NativeStackView: NSStackView {
+final class NativeStackView: NSStackView, NativeStateTrackable {
     private(set) var contentViews: [NSView] = []
     var nativeJustifyContent: String? { didSet { rebuildArrangement() } }
+    var stateDidChange: ((String, Bool) -> Void)?
+    private var hoverArea: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        if let hoverArea { removeTrackingArea(hoverArea) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.activeInKeyWindow, .mouseEnteredAndExited, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        hoverArea = area
+        super.updateTrackingAreas()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        stateDidChange?("hover", true)
+        super.mouseEntered(with: event)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        stateDidChange?("hover", false)
+        super.mouseExited(with: event)
+    }
 
     func insertNativeArrangedSubview(_ view: NSView, at index: Int) {
         contentViews.removeAll { $0 === view }

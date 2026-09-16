@@ -7,6 +7,71 @@ const searchVisible = ref(false)
 const whyVisible = ref(false)
 const status = ref('Ready — rendered by Vue in JavaScriptCore and AppKit.')
 const search = ref('')
+let menuCloseTimer: ReturnType<typeof setTimeout> | undefined
+
+interface MenuEntry {
+  label: string
+  external?: boolean
+}
+
+interface MenuGroup {
+  heading?: string
+  entries: MenuEntry[]
+}
+
+const navigationMenus: Record<string, MenuGroup[]> = {
+  Docs: [{ entries: [
+    { label: 'Quick Start' }, { label: 'Guide' }, { label: 'Tutorial' }, { label: 'Examples' },
+    { label: 'API' }, { label: 'Glossary' }, { label: 'Error Reference' },
+    { label: 'Vue 2 Docs', external: true }, { label: 'Migration from Vue 2', external: true }
+  ] }],
+  Ecosystem: [
+    { heading: 'RESOURCES', entries: [
+      { label: 'Themes' }, { label: 'UI Components', external: true }, { label: 'Plugins Collection', external: true },
+      { label: 'Certification', external: true }, { label: 'Jobs', external: true }, { label: 'T-Shirt Shop', external: true }
+    ] },
+    { heading: 'OFFICIAL LIBRARIES', entries: [
+      { label: 'Vue Router', external: true }, { label: 'Pinia', external: true }, { label: 'Tooling Guide' }
+    ] },
+    { heading: 'VIDEO COURSES', entries: [
+      { label: 'Vue Mastery', external: true }, { label: 'Vue School', external: true }
+    ] },
+    { heading: 'HELP', entries: [
+      { label: 'Discord Chat', external: true }, { label: 'GitHub Discussions', external: true }, { label: 'DEV Community', external: true }
+    ] },
+    { heading: 'NEWS', entries: [
+      { label: 'Blog', external: true }, { label: 'Twitter', external: true },
+      { label: 'Events', external: true }, { label: 'Newsletters' }
+    ] }
+  ],
+  About: [{ entries: [
+    { label: 'FAQ' }, { label: 'Team' }, { label: 'Releases' }, { label: 'Community Guide' },
+    { label: 'Code of Conduct' }, { label: 'Privacy Policy' }, { label: 'The Documentary', external: true }
+  ] }],
+  Support: [{ entries: [{ label: 'Sponsor' }, { label: 'Partners' }] }]
+}
+
+const menuLayout: Record<string, { left: number; height: number }> = {
+  Docs: { left: 450, height: 278 },
+  Ecosystem: { left: 674, height: 690 },
+  About: { left: 766, height: 222 },
+  Support: { left: 868, height: 82 }
+}
+
+const activeMenuRows = computed(() => (navigationMenus[activeMenu.value] ?? []).flatMap(group => [
+  ...(group.heading ? [{ kind: 'heading' as const, label: group.heading }] : []),
+  ...group.entries.map(entry => ({ kind: 'entry' as const, ...entry }))
+]))
+
+const dropdownStyle = computed(() => {
+  const layout = menuLayout[activeMenu.value] ?? menuLayout.Docs
+  return {
+    position: 'absolute', top: 43, left: layout.left, zIndex: 100, width: 192, height: layout.height,
+    padding: { top: 12, right: 12, bottom: 12, left: 12 }, spacing: 0, alignment: 'leading',
+    backgroundColor: palette.value.background, borderColor: palette.value.divider, borderWidth: 1,
+    borderRadius: 8, boxShadow: { offset: { x: 0, y: 2 }, blur: 6, color: '#00000033' }
+  }
+})
 
 const palette = computed(() => darkMode.value
   ? {
@@ -45,40 +110,46 @@ const footerGroups = [
   ['News', 'Blog ↗', 'Twitter ↗', 'Events ↗', 'Newsletters', '', 'Video Courses', 'Vue Mastery ↗', 'Vue School ↗']
 ]
 
-function toggleMenu(menu: string) {
-  activeMenu.value = activeMenu.value === menu ? '' : menu
+function openMenu(menu: string) {
+  cancelMenuClose()
+  activeMenu.value = menu
+}
+
+function scheduleMenuClose() {
+  cancelMenuClose()
+  menuCloseTimer = setTimeout(() => { activeMenu.value = '' }, 140)
+}
+
+function cancelMenuClose() {
+  if (menuCloseTimer !== undefined) clearTimeout(menuCloseTimer)
+  menuCloseTimer = undefined
 }
 
 function choose(label: string) {
   status.value = `${label} selected — navigation is intentionally kept inside this local demo.`
   activeMenu.value = ''
+  cancelMenuClose()
 }
 </script>
 
 <template>
   <mac-window title="Vue.js — Native AppKit Demo" :width="1280" :height="820" :min-width="980" :min-height="680">
-    <mac-v-stack :style="{ spacing: 0, alignment: 'center', backgroundColor: palette.background }">
+    <mac-z-stack :style="{ backgroundColor: palette.background }">
+      <mac-v-stack :style="{ spacing: 0, alignment: 'center', backgroundColor: palette.background }">
       <mac-h-stack :style="{ width: 1248, height: 55, padding: { left: 24, right: 24 }, spacing: 14, alignment: 'center', backgroundColor: palette.background }">
         <mac-image src="assets/vue-logo.svg" content-mode="fit" :style="{ width: 28, height: 28 }" />
         <mac-text text="Vue.js" :style="{ fontSize: 17, fontWeight: 'semibold', color: palette.text }" />
         <mac-button title="⌕  Search" :bordered="false" @click="searchVisible = !searchVisible" :style="{ width: 108, height: 32, color: palette.muted, backgroundColor: palette.panel, cornerRadius: 8 }" />
         <mac-spacer />
-        <mac-button title="Docs⌄" :bordered="false" @click="toggleMenu('Docs')" :style="{ width: 72, height: 32, color: palette.text }" />
+        <mac-button title="Docs" :system-image="activeMenu === 'Docs' ? 'chevron.up' : 'chevron.down'" :bordered="false" @mouseenter="openMenu('Docs')" @mouseleave="scheduleMenuClose" @click="openMenu('Docs')" :style="{ width: 72, height: 32, color: palette.text, hoverStyle: { color: '#42B883' } }" />
         <mac-button title="Playground" :bordered="false" @click="choose('Playground')" :style="{ width: 92, height: 32, color: palette.text }" />
-        <mac-button title="Ecosystem⌄" :bordered="false" @click="toggleMenu('Ecosystem')" :style="{ width: 104, height: 32, color: palette.text }" />
-        <mac-button title="About⌄" :bordered="false" @click="toggleMenu('About')" :style="{ width: 78, height: 32, color: palette.text }" />
-        <mac-button title="Support⌄" :bordered="false" @click="toggleMenu('Support')" :style="{ width: 88, height: 32, color: palette.text }" />
+        <mac-button title="Ecosystem" :system-image="activeMenu === 'Ecosystem' ? 'chevron.up' : 'chevron.down'" :bordered="false" @mouseenter="openMenu('Ecosystem')" @mouseleave="scheduleMenuClose" @click="openMenu('Ecosystem')" :style="{ width: 104, height: 32, color: palette.text, hoverStyle: { color: '#42B883' } }" />
+        <mac-button title="About" :system-image="activeMenu === 'About' ? 'chevron.up' : 'chevron.down'" :bordered="false" @mouseenter="openMenu('About')" @mouseleave="scheduleMenuClose" @click="openMenu('About')" :style="{ width: 78, height: 32, color: palette.text, hoverStyle: { color: '#42B883' } }" />
+        <mac-button title="Support" :system-image="activeMenu === 'Support' ? 'chevron.up' : 'chevron.down'" :bordered="false" @mouseenter="openMenu('Support')" @mouseleave="scheduleMenuClose" @click="openMenu('Support')" :style="{ width: 88, height: 32, color: palette.text, hoverStyle: { color: '#42B883' } }" />
         <mac-button :title="darkMode ? '☀︎' : '◐'" :bordered="false" @click="darkMode = !darkMode" :style="{ width: 42, height: 28, color: palette.muted, backgroundColor: palette.panelRaised, cornerRadius: 14 }" />
         <mac-text text="⌘  𝕏  ◉" :style="{ width: 80, color: palette.muted }" />
       </mac-h-stack>
       <mac-divider :style="{ width: 1248 }" />
-
-      <mac-v-stack v-if="activeMenu" :style="{ width: 1248, padding: { top: 10, bottom: 10 }, spacing: 7, alignment: 'center', backgroundColor: palette.panel }">
-        <mac-text :text="`${activeMenu} menu`" :style="{ width: 760, fontWeight: 'semibold', color: '#42B883' }" />
-        <mac-h-stack :style="{ spacing: 24 }">
-          <mac-button v-for="entry in ['Quick Start', 'Guide', 'Tutorial', 'Examples', 'API']" :key="entry" :title="entry" :bordered="false" @click="choose(entry)" :style="{ color: palette.muted }" />
-        </mac-h-stack>
-      </mac-v-stack>
 
       <mac-v-stack v-if="searchVisible" :style="{ width: 1248, height: 54, padding: { left: 244, right: 244, top: 10, bottom: 10 }, spacing: 8, alignment: 'center', backgroundColor: palette.panel }">
         <mac-text-field v-model="search" placeholder="Search the Vue documentation" :style="{ width: 760 }" @submit="status = `Search submitted: ${search || 'empty query'}`" />
@@ -155,6 +226,30 @@ function choose(label: string) {
         <mac-spacer />
         <mac-text text="Native AppKit • no DOM • no WebView" :style="{ fontSize: 12, color: '#42B883' }" />
       </mac-h-stack>
-    </mac-v-stack>
+      </mac-v-stack>
+
+      <mac-v-stack
+        v-if="activeMenu"
+        :style="dropdownStyle"
+        @mouseenter="cancelMenuClose"
+        @mouseleave="scheduleMenuClose"
+      >
+        <template v-for="(row, index) in activeMenuRows" :key="`${activeMenu}-${index}-${row.label}`">
+          <mac-text
+            v-if="row.kind === 'heading'"
+            :text="row.label"
+            :style="{ width: 166, height: 32, fontSize: 10, fontWeight: 'semibold', letterSpacing: 0.8, color: palette.faint }"
+          />
+          <mac-button
+            v-else
+            :title="row.external ? `${row.label} ↗` : row.label"
+            text-alignment="left"
+            :bordered="false"
+            @click="choose(row.label)"
+            :style="{ width: 166, height: 28, fontSize: 13, color: palette.muted, hoverStyle: { color: '#42B883', backgroundColor: palette.panelRaised } }"
+          />
+        </template>
+      </mac-v-stack>
+    </mac-z-stack>
   </mac-window>
 </template>

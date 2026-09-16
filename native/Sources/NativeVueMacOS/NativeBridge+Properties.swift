@@ -86,6 +86,26 @@ extension NativeBridge {
             case "texturedRounded": button.bezelStyle = .texturedRounded
             default: throw propertyError(node, name, "unsupported bezel style")
             }
+        case ("mac-button", "systemImage"):
+            guard let button = node.view as? NSButton else { throw propertyError(node, name) }
+            if let symbol = string(value), !symbol.isEmpty {
+                let configuration = NSImage.SymbolConfiguration(pointSize: 9, weight: .semibold)
+                button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+                    .withSymbolConfiguration(configuration)
+                button.imagePosition = .imageTrailing
+                button.imageHugsTitle = true
+            } else {
+                button.image = nil
+            }
+        case ("mac-button", "textAlignment"):
+            guard let button = node.view as? NSButton else { throw propertyError(node, name) }
+            switch string(value) {
+            case nil, "natural": button.alignment = .natural
+            case "left", "leading": button.alignment = .left
+            case "center": button.alignment = .center
+            case "right", "trailing": button.alignment = .right
+            default: throw propertyError(node, name, "expected leading, center, or trailing")
+            }
         case ("mac-button", "enabled"), ("mac-text-field", "enabled"), ("mac-secure-field", "enabled"), ("mac-toggle", "enabled"):
             let enabled = boolean(value, default: true)
             (node.view as? NSControl)?.isEnabled = enabled

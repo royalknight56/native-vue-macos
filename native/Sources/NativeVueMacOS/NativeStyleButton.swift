@@ -1,7 +1,12 @@
 import AppKit
 
 @MainActor
-final class NativeStyleButton: NSButton {
+protocol NativeStateTrackable: AnyObject {
+    var stateDidChange: ((String, Bool) -> Void)? { get set }
+}
+
+@MainActor
+final class NativeStyleButton: NSButton, NativeStateTrackable {
     var stateDidChange: ((String, Bool) -> Void)?
     private var hoverArea: NSTrackingArea?
 
