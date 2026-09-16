@@ -13,6 +13,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@native-vue-macos/style-schema": "0.1.0",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/compiler-core": "^3.5.0",
     "chokidar": "^4.0.0",

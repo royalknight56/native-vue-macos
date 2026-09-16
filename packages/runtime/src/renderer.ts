@@ -3,9 +3,16 @@ import { bridge, checked, type NativeValue } from './bridge'
 import { disposeEvents, patchEvent } from './events'
 import { NativeNode, createRootNode } from './node'
 import { getElementDescriptor, isKnownElement } from './registry'
+import { flattenNativeStyle, normalizeNativeClass, resolveNativeStyle, setNativeStyleInvalidator, type NativeClassInput, type NativeStyleInput } from './style'
+import type { NativeStyleProperty } from '@native-vue-macos/style-schema'
 
 function insert(child: NativeNode, parent: NativeNode, anchor: NativeNode | null = null): void {
+  // Positioning affects whether Swift inserts into NSStackView's arrangedSubviews.
+  // Apply the node's own rules before insertion, then resolve inherited values once
+  // the native and renderer parent relationships have both been established.
+  applyResolvedStyle(child)
   parent.insert(child, anchor)
+  applyResolvedStyle(child)
   if (child.type === 'mac-window') checked(bridge().showWindow(child.id), 'showWindow')
 }
 
@@ -48,21 +55,34 @@ function nextSibling(node: NativeNode): NativeNode | null {
   return node.parent.children[index + 1] ?? null
 }
 
-function patchStyle(node: NativeNode, previous: unknown, next: unknown): void {
-  if (next != null && (typeof next !== 'object' || Array.isArray(next))) {
-    throw new Error(`The style prop on <${node.type}> must be an object`)
-  }
-  const before = (previous ?? {}) as Record<string, NativeValue>
-  const after = (next ?? {}) as Record<string, NativeValue>
-  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+function applyResolvedStyle(node: NativeNode): void {
+  const before = node.appliedStyle
+  const after = resolveNativeStyle(node)
+  for (const key of new Set<NativeStyleProperty>([
+    ...Object.keys(before) as NativeStyleProperty[],
+    ...Object.keys(after) as NativeStyleProperty[]
+  ])) {
     checked(bridge().setStyle(node.id, key, after[key] ?? null), `setStyle(${node.type}.${key})`)
   }
+  node.appliedStyle = after
+  for (const child of node.children) applyResolvedStyle(child)
+}
+
+function patchStyle(node: NativeNode, next: unknown): void {
+  node.inlineStyle = flattenNativeStyle(next as NativeStyleInput)
+  applyResolvedStyle(node)
 }
 
 function patchProp(node: NativeNode, key: string, previous: unknown, next: unknown): void {
-  if (key === 'style') return patchStyle(node, previous, next)
+  if (key === 'style') return patchStyle(node, next)
   if (key === 'class') {
-    if (next) throw new Error('CSS classes are not supported; use an inline :style object')
+    node.classNames = normalizeNativeClass(next as NativeClassInput)
+    applyResolvedStyle(node)
+    return
+  }
+  if (key === 'id') {
+    node.nativeId = next == null ? undefined : String(next)
+    applyResolvedStyle(node)
     return
   }
 
@@ -102,7 +122,10 @@ const options: RendererOptions<NativeNode, NativeNode> = {
   parentNode,
   nextSibling,
   patchProp,
-  setScopeId: () => {},
+  setScopeId(node, id) {
+    node.scopeIds.add(id)
+    applyResolvedStyle(node)
+  },
   cloneNode: node => node,
   insertStaticContent(content, parent, anchor) {
     const node = createText(content)
@@ -120,6 +143,10 @@ interface RuntimeSession {
 }
 
 const session: RuntimeSession = {}
+
+setNativeStyleInvalidator(() => {
+  for (const child of session.root?.children ?? []) applyResolvedStyle(child)
+})
 
 export type NativeApp = Omit<ReturnType<typeof nativeRenderer.createApp>, 'mount'> & {
   mount(container?: NativeNode): unknown

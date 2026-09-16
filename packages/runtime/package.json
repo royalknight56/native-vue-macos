@@ -14,6 +14,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@native-vue-macos/style-schema": "0.1.0",
     "@vue/runtime-core": "^3.5.0",
     "vue": "^3.5.0"
   },

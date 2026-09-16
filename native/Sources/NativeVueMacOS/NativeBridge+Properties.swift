@@ -1,10 +1,31 @@
 import AppKit
 import JavaScriptCore
 
+private let nativeStylePropertyNames: Set<String> = [
+    "width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight", "aspectRatio",
+    "margin", "marginTop", "marginRight", "marginBottom", "marginLeft", "marginHorizontal", "marginVertical",
+    "padding", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "paddingHorizontal", "paddingVertical",
+    "display", "flexDirection", "flexGrow", "flexShrink", "flexBasis", "flexWrap",
+    "justifyContent", "alignItems", "alignSelf", "alignment", "gap", "rowGap", "columnGap", "spacing",
+    "position", "top", "right", "bottom", "left", "zIndex",
+    "opacity", "hidden", "visibility", "overflow", "backgroundColor",
+    "borderColor", "borderWidth", "borderRadius", "cornerRadius",
+    "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor",
+    "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
+    "borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius",
+    "boxShadow", "shadowColor", "shadowOpacity", "shadowRadius", "shadowOffset", "elevation",
+    "color", "fontSize", "fontWeight", "fontFamily", "fontStyle", "lineHeight", "letterSpacing",
+    "textAlign", "textDecorationLine", "textDecorationColor", "textTransform",
+    "objectFit", "resizeMode", "tintColor", "cursor", "transform", "transformOrigin",
+    "hoverStyle", "pressedStyle", "focusStyle", "disabledStyle",
+    "gradientStartColor", "gradientEndColor"
+]
+
 @MainActor
 extension NativeBridge {
     func applyProperty(node: NativeNode, name: String, value: JSValue) throws {
-        if ["width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight", "opacity", "hidden", "backgroundColor", "color", "fontSize", "fontWeight", "padding", "spacing", "alignment", "cornerRadius", "borderWidth", "borderColor", "gradientStartColor", "gradientEndColor"].contains(name) {
+        let windowGeometry = node.type == "mac-window" && ["width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight"].contains(name)
+        if nativeStylePropertyNames.contains(name) && !windowGeometry {
             try applyStyle(node: node, name: name, value: value)
             return
         }
@@ -19,6 +40,10 @@ extension NativeBridge {
             node.window?.contentMinSize.width = number(value) ?? 0
         case ("mac-window", "minHeight"):
             node.window?.contentMinSize.height = number(value) ?? 0
+        case ("mac-window", "maxWidth"):
+            node.window?.contentMaxSize.width = number(value) ?? .greatestFiniteMagnitude
+        case ("mac-window", "maxHeight"):
+            node.window?.contentMaxSize.height = number(value) ?? .greatestFiniteMagnitude
         case ("mac-window", "width"):
             if let size = number(value), let window = node.window {
                 window.setContentSize(NSSize(width: size, height: window.contentLayoutRect.height))
@@ -62,7 +87,9 @@ extension NativeBridge {
             default: throw propertyError(node, name, "unsupported bezel style")
             }
         case ("mac-button", "enabled"), ("mac-text-field", "enabled"), ("mac-secure-field", "enabled"), ("mac-toggle", "enabled"):
-            (node.view as? NSControl)?.isEnabled = boolean(value, default: true)
+            let enabled = boolean(value, default: true)
+            (node.view as? NSControl)?.isEnabled = enabled
+            setNativeState(nodeID: node.id, state: "disabled", active: !enabled)
         case ("mac-text-field", "value"), ("mac-secure-field", "value"):
             (node.view as? NSTextField)?.stringValue = string(value) ?? ""
         case ("mac-text-field", "placeholder"), ("mac-secure-field", "placeholder"):
@@ -109,49 +136,97 @@ extension NativeBridge {
 
     func applyStyle(node: NativeNode, name: String, value: JSValue) throws {
         guard let view = node.view else { throw propertyError(node, name, "node has no view") }
-        switch name {
+        let canonical = name == "cornerRadius" ? "borderRadius" : (name == "spacing" ? "gap" : name)
+        if value.isNull || value.isUndefined {
+            node.styleValues.removeValue(forKey: canonical)
+        } else if let object = value.toObject() {
+            node.styleValues[canonical] = object
+        }
+
+        switch canonical {
         case "width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight":
-            try updateSizeConstraint(node: node, name: name, value: value)
-        case "opacity":
-            view.alphaValue = CGFloat(number(value) ?? 1)
-        case "hidden":
-            view.isHidden = boolean(value)
-        case "backgroundColor":
+            try updateSizeConstraint(node: node, name: canonical, value: value)
+        case "aspectRatio":
+            updateAspectRatio(node)
+        case "margin", "marginTop", "marginRight", "marginBottom", "marginLeft", "marginHorizontal", "marginVertical":
+            updateMargins(node)
+        case "padding", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "paddingHorizontal", "paddingVertical":
+            guard let stack = view as? NSStackView else { throw propertyError(node, name, "padding requires a stack container") }
+            stack.edgeInsets = resolvedInsets(node.styleValues, prefix: "padding")
+        case "gap", "rowGap", "columnGap":
+            guard let stack = view as? NSStackView else { throw propertyError(node, name, "gap requires a stack container") }
+            let directional = stack.orientation == .vertical ? styleNumber(node, "rowGap") : styleNumber(node, "columnGap")
+            stack.spacing = directional ?? styleNumber(node, "gap") ?? 8
+        case "display", "visibility", "hidden":
+            let display = styleString(node, "display")
+            let visibility = styleString(node, "visibility")
+            view.isHidden = styleBool(node, "hidden") || display == "none" || visibility == "hidden"
+        case "flexDirection":
+            guard let stack = view as? NSStackView else { throw propertyError(node, name, "flexDirection requires a stack container") }
+            switch styleString(node, "flexDirection") {
+            case nil, "column": stack.orientation = .vertical
+            case "row": stack.orientation = .horizontal
+            case "columnReverse", "rowReverse": throw propertyError(node, name, "reverse direction is not supported by NSStackView")
+            default: throw propertyError(node, name, "expected row or column")
+            }
+            (stack as? NativeStackView)?.rebuildArrangement()
+        case "flexGrow", "flexShrink":
+            updateFlexPriorities(node)
+        case "flexBasis":
+            updateFlexBasis(node)
+        case "flexWrap":
+            guard styleString(node, "flexWrap") == nil || styleString(node, "flexWrap") == "nowrap" else {
+                throw propertyError(node, name, "NSStackView does not support wrapping; use nested stacks")
+            }
+        case "justifyContent":
+            guard let stack = view as? NSStackView else { throw propertyError(node, name, "justifyContent requires a stack container") }
+            switch styleString(node, "justifyContent") {
+            case "spaceBetween", "spaceAround", "spaceEvenly", nil, "flexStart", "center", "flexEnd": stack.distribution = .fill
+            default: throw propertyError(node, name, "unsupported justifyContent value")
+            }
+            (stack as? NativeStackView)?.nativeJustifyContent = styleString(node, "justifyContent")
+        case "alignItems", "alignment":
+            guard let stack = view as? NSStackView else { throw propertyError(node, name, "alignItems requires a stack container") }
+            stack.alignment = try alignment(styleString(node, canonical), orientation: stack.orientation)
+        case "alignSelf":
+            updateAlignSelf(node)
+        case "position", "top", "right", "bottom", "left":
+            updatePosition(node)
+        case "zIndex":
             view.wantsLayer = true
-            view.layer?.backgroundColor = try color(value)?.cgColor
-        case "color":
-            let parsed = try color(value)
-            if let field = view as? NSTextField { field.textColor = parsed }
-            else if let control = view as? NSButton { control.contentTintColor = parsed }
-            else if let image = view as? NSImageView { image.contentTintColor = parsed }
-            else { throw propertyError(node, name, "only text, controls, and images support foreground color") }
-        case "fontSize":
-            guard let control = view as? NSControl else { throw propertyError(node, name, "only controls support fonts") }
-            let size = number(value) ?? NSFont.systemFontSize
-            control.font = NSFont.systemFont(ofSize: size, weight: fontWeight(control.font))
-        case "fontWeight":
-            guard let control = view as? NSControl else { throw propertyError(node, name, "only controls support fonts") }
-            let weight = try parseFontWeight(value)
-            control.font = NSFont.systemFont(ofSize: control.font?.pointSize ?? NSFont.systemFontSize, weight: weight)
-        case "spacing":
-            guard let stack = view as? NSStackView else { throw propertyError(node, name, "only stack containers support spacing") }
-            stack.spacing = number(value) ?? 8
-        case "padding":
-            guard let stack = view as? NSStackView else { throw propertyError(node, name, "only stack containers support padding") }
-            stack.edgeInsets = try edgeInsets(value)
-        case "alignment":
-            guard let stack = view as? NSStackView else { throw propertyError(node, name, "only stack containers support alignment") }
-            stack.alignment = try alignment(string(value), orientation: stack.orientation)
-        case "cornerRadius":
-            view.wantsLayer = true
-            view.layer?.cornerRadius = number(value) ?? 0
-            view.layer?.masksToBounds = true
-        case "borderWidth":
-            view.wantsLayer = true
-            view.layer?.borderWidth = number(value) ?? 0
-        case "borderColor":
-            view.wantsLayer = true
-            view.layer?.borderColor = try color(value)?.cgColor
+            view.layer?.zPosition = styleNumber(node, "zIndex") ?? 0
+        case "opacity", "overflow", "backgroundColor",
+             "borderColor", "borderWidth", "borderRadius",
+             "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor",
+             "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
+             "borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius",
+             "boxShadow", "shadowColor", "shadowOpacity", "shadowRadius", "shadowOffset", "elevation",
+             "color", "tintColor", "transform", "transformOrigin",
+             "hoverStyle", "pressedStyle", "focusStyle", "disabledStyle":
+            refreshStateAppearance(node)
+        case "fontSize", "fontWeight", "fontFamily", "fontStyle", "lineHeight", "letterSpacing",
+             "textAlign", "textDecorationLine", "textDecorationColor", "textTransform":
+            guard view is NSControl else { throw propertyError(node, name, "text styles require a native control") }
+            refreshTextAppearance(node)
+        case "objectFit", "resizeMode":
+            guard let image = view as? NSImageView else { throw propertyError(node, name, "objectFit requires an image") }
+            switch styleString(node, canonical) {
+            case nil, "contain": image.imageScaling = .scaleProportionallyUpOrDown
+            case "cover", "fill": image.imageScaling = .scaleAxesIndependently
+            case "center", "none": image.imageScaling = .scaleNone
+            default: throw propertyError(node, name, "expected contain, cover, fill, center, or none")
+            }
+        case "cursor":
+            let cursor: NSCursor
+            switch styleString(node, "cursor") {
+            case nil, "default": cursor = .arrow
+            case "pointer": cursor = .pointingHand
+            case "text": cursor = .iBeam
+            case "crosshair": cursor = .crosshair
+            case "notAllowed": cursor = .operationNotAllowed
+            default: throw propertyError(node, name, "unsupported cursor")
+            }
+            view.addCursorRect(view.bounds, cursor: cursor)
         case "gradientStartColor":
             guard let field = view as? GradientTextField, let parsed = try color(value) else {
                 throw propertyError(node, name, "only gradient text supports gradient colors")
@@ -167,10 +242,338 @@ extension NativeBridge {
         }
     }
 
+    func refreshStateAppearance(_ node: NativeNode) {
+        guard let view = node.view else { return }
+        var styles = node.styleValues
+        let stateKeys = ["hoverStyle", "pressedStyle", "focusStyle", "disabledStyle"]
+        for key in stateKeys { styles.removeValue(forKey: key) }
+        for state in ["hover", "focus", "pressed", "disabled"] where node.activeStates.contains(state) {
+            if let stateStyle = node.styleValues["\(state)Style"] as? [String: Any] {
+                styles.merge(stateStyle) { _, active in active }
+            }
+        }
+
+        view.wantsLayer = true
+        view.alphaValue = CGFloat(anyNumber(styles["opacity"]) ?? 1)
+        view.layer?.backgroundColor = try? anyColor(styles["backgroundColor"])?.cgColor
+        view.layer?.masksToBounds = (styles["overflow"] as? String) == "hidden"
+        let radii = ["borderRadius", "borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius"]
+            .compactMap { anyNumber(styles[$0]) }
+        view.layer?.cornerRadius = radii.max() ?? 0
+        updateBorderLayers(node, styles: styles)
+
+        var shadowColor = styles["shadowColor"]
+        var shadowOpacity = anyNumber(styles["shadowOpacity"])
+        var shadowRadius = anyNumber(styles["shadowRadius"])
+        var shadowOffset = styles["shadowOffset"] as? [String: Any]
+        if let shadow = styles["boxShadow"] as? [String: Any] {
+            shadowColor = shadow["color"] ?? shadowColor
+            shadowOpacity = shadowOpacity ?? 1
+            shadowRadius = anyNumber(shadow["blur"]) ?? shadowRadius
+            shadowOffset = shadow["offset"] as? [String: Any] ?? shadowOffset
+        }
+        view.layer?.shadowColor = try? anyColor(shadowColor)?.cgColor
+        view.layer?.shadowOpacity = Float(shadowOpacity ?? (shadowColor == nil ? 0 : 1))
+        view.layer?.shadowRadius = shadowRadius ?? anyNumber(styles["elevation"]) ?? 0
+        view.layer?.shadowOffset = CGSize(
+            width: anyNumber(shadowOffset?["x"]) ?? 0,
+            height: -(anyNumber(shadowOffset?["y"]) ?? 0)
+        )
+
+        if let color = try? anyColor(styles["color"] ?? styles["tintColor"]) {
+            if let field = view as? NSTextField { field.textColor = color }
+            else if let button = view as? NSButton { button.contentTintColor = color }
+            else if let image = view as? NSImageView { image.contentTintColor = color }
+        }
+        applyTransformOrigin(styles["transformOrigin"], to: view)
+        applyTransform(styles["transform"], to: view)
+        refreshTextAppearance(node, styles: styles)
+    }
+
+    func refreshLayoutAfterInsertion(_ node: NativeNode) {
+        updateMargins(node)
+        updateFlexPriorities(node)
+        updateFlexBasis(node)
+        updateAlignSelf(node)
+        updatePosition(node)
+    }
+
+    func refreshTextAppearance(_ node: NativeNode, styles explicitStyles: [String: Any]? = nil) {
+        guard let control = node.view as? NSControl else { return }
+        let styles = explicitStyles ?? node.styleValues
+        let size = anyNumber(styles["fontSize"]) ?? control.font?.pointSize ?? NSFont.systemFontSize
+        let weight = parseFontWeight(styles["fontWeight"])
+        let family = styles["fontFamily"] as? String
+        var font = family.flatMap { NSFont(name: $0, size: size) } ?? NSFont.systemFont(ofSize: size, weight: weight)
+        if styles["fontStyle"] as? String == "italic" {
+            font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+        }
+        control.font = font
+        guard let field = control as? NSTextField else { return }
+
+        switch styles["textAlign"] as? String {
+        case "center": field.alignment = .center
+        case "right", "end": field.alignment = .right
+        case "left", "start": field.alignment = .left
+        default: break
+        }
+        guard !(field is GradientTextField) else { return }
+
+        var text = node.rawText.isEmpty ? field.stringValue : node.rawText
+        switch styles["textTransform"] as? String {
+        case "uppercase": text = text.uppercased()
+        case "lowercase": text = text.lowercased()
+        case "capitalize": text = text.capitalized
+        default: break
+        }
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = field.alignment
+        if let lineHeight = anyNumber(styles["lineHeight"]) {
+            paragraph.minimumLineHeight = lineHeight
+            paragraph.maximumLineHeight = lineHeight
+        }
+        var attributes: [NSAttributedString.Key: Any] = [.font: font, .paragraphStyle: paragraph]
+        if let color = try? anyColor(styles["color"]) { attributes[.foregroundColor] = color }
+        if let spacing = anyNumber(styles["letterSpacing"]) { attributes[.kern] = spacing }
+        if let decoration = styles["textDecorationLine"] as? String {
+            if decoration.contains("underline") { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+            if decoration.contains("lineThrough") { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+        }
+        if let decorationColor = try? anyColor(styles["textDecorationColor"]) {
+            attributes[.underlineColor] = decorationColor
+            attributes[.strikethroughColor] = decorationColor
+        }
+        field.attributedStringValue = NSAttributedString(string: text, attributes: attributes)
+    }
+
+    private func updateAspectRatio(_ node: NativeNode) {
+        node.constraints["aspectRatio"]?.isActive = false
+        node.constraints.removeValue(forKey: "aspectRatio")
+        guard let view = node.view, let ratio = styleNumber(node, "aspectRatio"), ratio > 0 else { return }
+        let constraint = view.widthAnchor.constraint(equalTo: view.heightAnchor, multiplier: ratio)
+        constraint.isActive = true
+        node.constraints["aspectRatio"] = constraint
+    }
+
+    private func updateMargins(_ node: NativeNode) {
+        guard let view = node.view, let stack = view.superview as? NSStackView,
+              stack.arrangedSubviews.contains(where: { $0 === view }) else { return }
+        let insets = resolvedInsets(node.styleValues, prefix: "margin")
+        let trailing = stack.orientation == .vertical ? insets.bottom : insets.right
+        stack.setCustomSpacing(stack.spacing + trailing, after: view)
+    }
+
+    private func updateFlexPriorities(_ node: NativeNode) {
+        guard let view = node.view else { return }
+        let grow = styleNumber(node, "flexGrow") ?? 0
+        let shrink = styleNumber(node, "flexShrink") ?? 0
+        let hugging: NSLayoutConstraint.Priority = grow > 0 ? .defaultLow : .defaultHigh
+        let compression: NSLayoutConstraint.Priority = shrink > 0 ? .defaultLow : .defaultHigh
+        view.setContentHuggingPriority(hugging, for: .horizontal)
+        view.setContentHuggingPriority(hugging, for: .vertical)
+        view.setContentCompressionResistancePriority(compression, for: .horizontal)
+        view.setContentCompressionResistancePriority(compression, for: .vertical)
+    }
+
+    private func updateFlexBasis(_ node: NativeNode) {
+        node.constraints["flexBasis"]?.isActive = false
+        node.constraints.removeValue(forKey: "flexBasis")
+        guard let view = node.view, let basis = styleNumber(node, "flexBasis") else { return }
+        let vertical = (view.superview as? NSStackView)?.orientation == .vertical
+        let constraint = vertical ? view.heightAnchor.constraint(greaterThanOrEqualToConstant: basis) : view.widthAnchor.constraint(greaterThanOrEqualToConstant: basis)
+        constraint.isActive = true
+        node.constraints["flexBasis"] = constraint
+    }
+
+    private func updateAlignSelf(_ node: NativeNode) {
+        for key in ["alignSelf.leading", "alignSelf.trailing", "alignSelf.center"] {
+            node.constraints[key]?.isActive = false
+            node.constraints.removeValue(forKey: key)
+        }
+        guard let view = node.view, let parent = node.parent?.insertionView, let value = styleString(node, "alignSelf") else { return }
+        let constraint: NSLayoutConstraint?
+        switch value {
+        case "start", "flexStart": constraint = view.leadingAnchor.constraint(equalTo: parent.leadingAnchor)
+        case "end", "flexEnd": constraint = view.trailingAnchor.constraint(equalTo: parent.trailingAnchor)
+        case "center": constraint = view.centerXAnchor.constraint(equalTo: parent.centerXAnchor)
+        case "stretch": constraint = view.widthAnchor.constraint(equalTo: parent.widthAnchor)
+        default: constraint = nil
+        }
+        constraint?.isActive = true
+        if let constraint { node.constraints["alignSelf.\(value)"] = constraint }
+    }
+
+    func updatePosition(_ node: NativeNode) {
+        for edge in ["top", "right", "bottom", "left"] {
+            node.constraints["position.\(edge)"]?.isActive = false
+            node.constraints.removeValue(forKey: "position.\(edge)")
+        }
+        guard let view = node.view, let parentNode = node.parent, let parent = parentNode.insertionView else { return }
+        let isAbsolute = styleString(node, "position") == "absolute"
+        if let stack = parent as? NativeStackView {
+            let isArranged = stack.contentViews.contains { $0 === view }
+            if isAbsolute && isArranged {
+                stack.removeNativeArrangedSubview(view)
+                stack.addSubview(view)
+            } else if !isAbsolute && !isArranged {
+                view.removeFromSuperview()
+                let nativeIndex = parentNode.children.prefix { $0 !== node }
+                    .filter { ($0.styleValues["position"] as? String) != "absolute" }.count
+                stack.insertNativeArrangedSubview(view, at: nativeIndex)
+            }
+        }
+        guard isAbsolute else { return }
+        let top = styleNumber(node, "top")
+        let left = styleNumber(node, "left")
+        let right = styleNumber(node, "right")
+        let bottom = styleNumber(node, "bottom")
+        let anchors: [(String, CGFloat?, NSLayoutConstraint)] = [
+            ("top", top, view.topAnchor.constraint(equalTo: parent.topAnchor, constant: top ?? 0)),
+            ("left", left, view.leadingAnchor.constraint(equalTo: parent.leadingAnchor, constant: left ?? 0)),
+            ("right", right, view.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -(right ?? 0))),
+            ("bottom", bottom, view.bottomAnchor.constraint(equalTo: parent.bottomAnchor, constant: -(bottom ?? 0)))
+        ]
+        for (key, value, constraint) in anchors where value != nil {
+            constraint.isActive = true
+            node.constraints["position.\(key)"] = constraint
+        }
+    }
+
+    private func resolvedInsets(_ values: [String: Any], prefix: String) -> NSEdgeInsets {
+        var result = NSEdgeInsets()
+        if let amount = anyNumber(values[prefix]) {
+            result = NSEdgeInsets(top: amount, left: amount, bottom: amount, right: amount)
+        } else if let map = values[prefix] as? [String: Any] {
+            result = NSEdgeInsets(
+                top: anyNumber(map["top"]) ?? 0,
+                left: anyNumber(map["left"]) ?? 0,
+                bottom: anyNumber(map["bottom"]) ?? 0,
+                right: anyNumber(map["right"]) ?? 0
+            )
+        }
+        if let vertical = anyNumber(values["\(prefix)Vertical"]) { result.top = vertical; result.bottom = vertical }
+        if let horizontal = anyNumber(values["\(prefix)Horizontal"]) { result.left = horizontal; result.right = horizontal }
+        if let top = anyNumber(values["\(prefix)Top"]) { result.top = top }
+        if let right = anyNumber(values["\(prefix)Right"]) { result.right = right }
+        if let bottom = anyNumber(values["\(prefix)Bottom"]) { result.bottom = bottom }
+        if let left = anyNumber(values["\(prefix)Left"]) { result.left = left }
+        return result
+    }
+
+    private func styleNumber(_ node: NativeNode, _ key: String) -> CGFloat? { anyNumber(node.styleValues[key]) }
+    private func styleString(_ node: NativeNode, _ key: String) -> String? { node.styleValues[key] as? String }
+    private func styleBool(_ node: NativeNode, _ key: String) -> Bool { (node.styleValues[key] as? NSNumber)?.boolValue ?? false }
+
+    private func anyNumber(_ value: Any?) -> CGFloat? {
+        if let number = value as? NSNumber { return CGFloat(number.doubleValue) }
+        if let number = value as? Double { return CGFloat(number) }
+        if let number = value as? Int { return CGFloat(number) }
+        return nil
+    }
+
+    private func anyColor(_ value: Any?) throws -> NSColor? {
+        guard let raw = value as? String else { return nil }
+        return try parseColor(raw)
+    }
+
+    private func updateBorderLayers(_ node: NativeNode, styles: [String: Any]) {
+        guard let view = node.view, let root = view.layer else { return }
+        let baseWidth = anyNumber(styles["borderWidth"]) ?? 0
+        let baseColor = styles["borderColor"]
+        let sideKeys = ["top", "right", "bottom", "left"]
+        let hasPerSide = sideKeys.contains { styles["border\($0.capitalized)Width"] != nil || styles["border\($0.capitalized)Color"] != nil }
+        if !hasPerSide {
+            root.borderWidth = baseWidth
+            root.borderColor = try? anyColor(baseColor)?.cgColor
+            for layer in node.decorationLayers.values { layer.removeFromSuperlayer() }
+            node.decorationLayers.removeAll()
+            return
+        }
+        root.borderWidth = 0
+        for side in sideKeys {
+            let layer = node.decorationLayers[side] ?? CALayer()
+            if layer.superlayer == nil { root.addSublayer(layer); node.decorationLayers[side] = layer }
+            let width = anyNumber(styles["border\(side.capitalized)Width"]) ?? baseWidth
+            let color = styles["border\(side.capitalized)Color"] ?? baseColor
+            layer.backgroundColor = try? anyColor(color)?.cgColor
+            switch side {
+            case "top":
+                layer.frame = CGRect(x: 0, y: root.bounds.height - width, width: root.bounds.width, height: width)
+                layer.autoresizingMask = [.layerWidthSizable, .layerMinYMargin]
+            case "right":
+                layer.frame = CGRect(x: root.bounds.width - width, y: 0, width: width, height: root.bounds.height)
+                layer.autoresizingMask = [.layerHeightSizable, .layerMinXMargin]
+            case "bottom":
+                layer.frame = CGRect(x: 0, y: 0, width: root.bounds.width, height: width)
+                layer.autoresizingMask = [.layerWidthSizable, .layerMaxYMargin]
+            default:
+                layer.frame = CGRect(x: 0, y: 0, width: width, height: root.bounds.height)
+                layer.autoresizingMask = [.layerHeightSizable, .layerMaxXMargin]
+            }
+            layer.isHidden = width <= 0
+        }
+    }
+
+    private func applyTransformOrigin(_ value: Any?, to view: NSView) {
+        guard let layer = view.layer, let raw = value as? String else { return }
+        let next: CGPoint
+        switch raw {
+        case "topLeft": next = CGPoint(x: 0, y: 1)
+        case "top": next = CGPoint(x: 0.5, y: 1)
+        case "topRight": next = CGPoint(x: 1, y: 1)
+        case "left": next = CGPoint(x: 0, y: 0.5)
+        case "right": next = CGPoint(x: 1, y: 0.5)
+        case "bottomLeft": next = CGPoint(x: 0, y: 0)
+        case "bottom": next = CGPoint(x: 0.5, y: 0)
+        case "bottomRight": next = CGPoint(x: 1, y: 0)
+        default: next = CGPoint(x: 0.5, y: 0.5)
+        }
+        let oldFrame = layer.frame
+        layer.anchorPoint = next
+        layer.frame = oldFrame
+    }
+
+    private func applyTransform(_ value: Any?, to view: NSView) {
+        guard let transforms = value as? [[String: Any]] else {
+            view.layer?.setAffineTransform(.identity)
+            return
+        }
+        var result = CGAffineTransform.identity
+        for transform in transforms {
+            for (name, raw) in transform {
+                let numeric = transformNumber(raw)
+                switch name {
+                case "translateX": result = result.translatedBy(x: numeric, y: 0)
+                case "translateY": result = result.translatedBy(x: 0, y: numeric)
+                case "scale": result = result.scaledBy(x: numeric, y: numeric)
+                case "scaleX": result = result.scaledBy(x: numeric, y: 1)
+                case "scaleY": result = result.scaledBy(x: 1, y: numeric)
+                case "rotate": result = result.rotated(by: transformAngle(raw))
+                default: break
+                }
+            }
+        }
+        view.layer?.setAffineTransform(result)
+    }
+
+    private func transformNumber(_ value: Any) -> CGFloat {
+        if let number = anyNumber(value) { return number }
+        if let string = value as? String { return CGFloat(Double(string.replacingOccurrences(of: "px", with: "")) ?? 0) }
+        return 0
+    }
+
+    private func transformAngle(_ value: Any) -> CGFloat {
+        guard let string = value as? String else { return transformNumber(value) }
+        if string.hasSuffix("deg") { return CGFloat((Double(string.dropLast(3)) ?? 0) * .pi / 180) }
+        if string.hasSuffix("rad") { return CGFloat(Double(string.dropLast(3)) ?? 0) }
+        return transformNumber(value)
+    }
+
     private func updateSizeConstraint(node: NativeNode, name: String, value: JSValue) throws {
         node.constraints[name]?.isActive = false
         node.constraints.removeValue(forKey: name)
         guard !value.isNull && !value.isUndefined else { return }
+        if value.isString && value.toString() == "auto" { return }
         guard let size = number(value), size >= 0, let view = node.view else {
             throw propertyError(node, name, "expected a non-negative number")
         }
@@ -222,6 +625,10 @@ extension NativeBridge {
 
     private func color(_ value: JSValue) throws -> NSColor? {
         guard let raw = string(value) else { return nil }
+        return try parseColor(raw)
+    }
+
+    private func parseColor(_ raw: String) throws -> NSColor? {
         let semantic: [String: NSColor] = [
             "label": .labelColor,
             "secondaryLabel": .secondaryLabelColor,
@@ -234,7 +641,12 @@ extension NativeBridge {
             "black": .black,
             "red": .systemRed,
             "green": .systemGreen,
-            "blue": .systemBlue
+            "blue": .systemBlue,
+            "gray": .systemGray,
+            "orange": .systemOrange,
+            "yellow": .systemYellow,
+            "purple": .systemPurple,
+            "pink": .systemPink
         ]
         if let value = semantic[raw] { return value }
         guard raw.hasPrefix("#") else { throw NSError.nativeVue("Unsupported color \(raw)") }
@@ -250,14 +662,25 @@ extension NativeBridge {
     }
 
     private func parseFontWeight(_ value: JSValue) throws -> NSFont.Weight {
-        switch string(value) {
+        parseFontWeight(string(value))
+    }
+
+    private func parseFontWeight(_ value: Any?) -> NSFont.Weight {
+        let raw: String?
+        if let string = value as? String { raw = string }
+        else if let number = value as? NSNumber { raw = number.stringValue }
+        else { raw = nil }
+        switch raw {
         case nil, "regular", "400": return .regular
+        case "thin", "100": return .thin
+        case "ultralight", "200": return .ultraLight
+        case "light", "300": return .light
         case "medium", "500": return .medium
         case "semibold", "600": return .semibold
         case "bold", "700": return .bold
         case "heavy", "800": return .heavy
         case "black", "900": return .black
-        default: throw NSError.nativeVue("Unsupported font weight \(string(value) ?? "")")
+        default: return .regular
         }
     }
 
@@ -281,16 +704,18 @@ extension NativeBridge {
     private func alignment(_ raw: String?, orientation: NSUserInterfaceLayoutOrientation) throws -> NSLayoutConstraint.Attribute {
         if orientation == .vertical {
             switch raw {
-            case nil, "leading": return .leading
+            case nil, "start", "flexStart", "leading": return .leading
             case "center": return .centerX
-            case "trailing": return .trailing
+            case "end", "flexEnd", "trailing": return .trailing
+            case "stretch": return .width
             default: break
             }
         } else {
             switch raw {
             case nil, "center": return .centerY
-            case "top": return .top
-            case "bottom": return .bottom
+            case "start", "flexStart", "top": return .top
+            case "end", "flexEnd", "bottom": return .bottom
+            case "stretch": return .height
             default: break
             }
         }

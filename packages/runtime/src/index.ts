@@ -5,6 +5,14 @@ export { createNativeApp as createApp, disposeApplication, nativeRenderer } from
 export { registerElement, isKnownElement } from './registry'
 export { installBridgeForTesting, type NativeBridge, type NativeValue } from './bridge'
 export { NativeNode } from './node'
+export {
+  StyleSheet,
+  flattenNativeStyle,
+  registerNativeStyleSheet,
+  unregisterNativeStyleSheet,
+  type NativeStyle,
+  type NativeStyleInput
+} from './style'
 export * from 'vue'
 
 export function defineNativeComponent(tag: string): Component {

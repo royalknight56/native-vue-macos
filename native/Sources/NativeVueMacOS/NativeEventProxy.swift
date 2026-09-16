@@ -27,6 +27,7 @@ final class NativeEventProxy: NSObject, NSTextFieldDelegate {
     }
 
     func controlTextDidBeginEditing(_ obj: Notification) {
+        bridge?.setNativeState(nodeID: nodeID, state: "focus", active: true)
         bridge?.dispatch(nodeID: nodeID, event: "focus", payload: [:])
     }
 
@@ -36,6 +37,7 @@ final class NativeEventProxy: NSObject, NSTextFieldDelegate {
     }
 
     func controlTextDidEndEditing(_ obj: Notification) {
+        bridge?.setNativeState(nodeID: nodeID, state: "focus", active: false)
         let value = (obj.object as? NSTextField)?.stringValue ?? ""
         bridge?.dispatch(nodeID: nodeID, event: "change", payload: ["value": value])
         bridge?.dispatch(nodeID: nodeID, event: "blur", payload: ["value": value])

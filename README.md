@@ -49,11 +49,11 @@ open dist/NativeVueShowcase.app
 - 控件：`mac-text`、`mac-button`、`mac-text-field`、`mac-secure-field`、`mac-toggle`、`mac-progress`、`mac-divider`、`mac-image`
 - 双向绑定：文本输入、密码输入和开关支持 `v-model`
 - 事件：`click`、`input`、`change`、`submit`、`focus`、`blur`
-- 内联样式：尺寸约束、透明度、显隐、背景色、前景色、字体、间距、padding 和对齐
+- 原生样式：StyleSheet、样式数组、class/id/标签选择器、scoped 样式、交互状态，以及尺寸、盒模型、Flex 风格布局、定位、字体、边框、阴影和变换
 
 颜色接受 `#RRGGBB`、`#RRGGBBAA`，以及 `label`、`secondaryLabel`、`accent`、`windowBackground`、`controlBackground`、`separator` 等系统语义色。
 
-首版不支持 CSS 文件或 `<style>`、网络图片、多窗口、菜单、表格和路由。编译器遇到 `<style>` 会直接报告包含文件路径的错误。
+SFC 支持 `<style native scoped>`。没有 `native` 标记的浏览器 CSS、复杂 DOM 选择器，以及 Grid、float、生成内容等无法映射到 AppKit 的属性会在编译期报告包含文件路径的错误。
 
 ## 仓库结构
 
@@ -62,4 +62,4 @@ open dist/NativeVueShowcase.app
 - `native`：Swift Package，包含 JavaScriptCore Host 和 AppKit bridge
 - `examples/showcase`：覆盖全部首批控件的示例应用
 
-详细设计参见 [docs/architecture.md](docs/architecture.md)，自定义原生控件参见 [docs/custom-elements.md](docs/custom-elements.md)。
+详细设计参见 [docs/architecture.md](docs/architecture.md)，样式系统参见 [docs/styling.md](docs/styling.md)，自定义原生控件参见 [docs/custom-elements.md](docs/custom-elements.md)。

@@ -14,8 +14,8 @@ const greeting = computed(() => name.value.trim() ? `你好，${name.value}` : '
     <mac-scroll-view>
       <mac-v-stack :style="{ padding: 24, spacing: 16, alignment: 'leading' }">
         <mac-text
+          class="hero-title"
           text="Vue 3 → JavaScriptCore → AppKit"
-          :style="{ fontSize: 24, fontWeight: 'semibold', color: 'label' }"
         />
         <mac-text
           text="这个窗口和下面的控件全部由 AppKit 创建，没有 DOM 或 WebView。"
@@ -51,3 +51,16 @@ const greeting = computed(() => name.value.trim() ? `你好，${name.value}` : '
     </mac-scroll-view>
   </mac-window>
 </template>
+
+<style native scoped>
+mac-text.hero-title {
+  color: label;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+mac-button:hover {
+  opacity: 0.82;
+}
+</style>

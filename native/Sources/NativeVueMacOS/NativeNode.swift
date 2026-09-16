@@ -10,6 +10,10 @@ final class NativeNode {
     var children: [NativeNode] = []
     var listeners: [String: Int] = [:]
     var constraints: [String: NSLayoutConstraint] = [:]
+    var styleValues: [String: Any] = [:]
+    var rawText: String = ""
+    var activeStates: Set<String> = []
+    var decorationLayers: [String: CALayer] = [:]
     var actionProxy: NativeEventProxy?
 
     init(id: Int, type: String, view: NSView? = nil, window: NSWindow? = nil) {

@@ -1,10 +1,16 @@
 import { bridge, checked } from './bridge'
+import type { NativeStyle } from './style'
 
 export class NativeNode {
   readonly id: number
   readonly type: string
   parent: NativeNode | null = null
   readonly children: NativeNode[] = []
+  inlineStyle: NativeStyle = {}
+  appliedStyle: NativeStyle = {}
+  classNames: string[] = []
+  nativeId?: string
+  readonly scopeIds = new Set<string>()
 
   constructor(type: string, id = bridge().createNode(type)) {
     if (id < 0) {

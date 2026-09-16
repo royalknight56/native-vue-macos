@@ -26,14 +26,14 @@ public final class NativeElementFactoryRegistry {
 
     private func installDefaults() {
         register("mac-v-stack") {
-            let view = NSStackView()
+            let view = NativeStackView()
             view.orientation = .vertical
             view.alignment = .leading
             view.spacing = 8
             return view
         }
         register("mac-h-stack") {
-            let view = NSStackView()
+            let view = NativeStackView()
             view.orientation = .horizontal
             view.alignment = .centerY
             view.spacing = 8
@@ -57,7 +57,7 @@ public final class NativeElementFactoryRegistry {
         }
         register("mac-text") { NSTextField(labelWithString: "") }
         register("mac-gradient-text") { GradientTextField() }
-        register("mac-button") { NSButton(title: "", target: nil, action: nil) }
+        register("mac-button") { NativeStyleButton(title: "", target: nil, action: nil) }
         register("mac-text-field") { NSTextField() }
         register("mac-secure-field") { NSSecureTextField() }
         register("mac-toggle") {

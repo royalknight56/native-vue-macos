@@ -70,7 +70,14 @@ public final class NativeBridge: NSObject, NativeBridgeExports {
                 nodes[id] = NativeNode(id: id, type: type, view: view)
             default:
                 guard let view = registry.makeView(for: type) else { throw failure("No factory registered for <\(type)>") }
-                nodes[id] = NativeNode(id: id, type: type, view: view)
+                let node = NativeNode(id: id, type: type, view: view)
+                nodes[id] = node
+                if let button = view as? NativeStyleButton {
+                    button.stateDidChange = { [weak self, weak node] state, active in
+                        guard let self, let node else { return }
+                        self.setNativeState(nodeID: node.id, state: state, active: active)
+                    }
+                }
             }
             return id
         }
@@ -95,7 +102,12 @@ public final class NativeBridge: NSObject, NativeBridgeExports {
             guard let parentView = parent.insertionView else { throw failure("<\(parent.type)> cannot contain native views") }
             childView.translatesAutoresizingMaskIntoConstraints = false
 
-            if let stack = parentView as? NSStackView {
+            let isAbsolute = child.styleValues["position"] as? String == "absolute"
+            if let stack = parentView as? NativeStackView, !isAbsolute {
+                let nativeIndex = parent.children.prefix(index)
+                    .filter { $0 !== child && ($0.styleValues["position"] as? String) != "absolute" }.count
+                stack.insertNativeArrangedSubview(childView, at: nativeIndex)
+            } else if let stack = parentView as? NSStackView, !isAbsolute {
                 stack.insertArrangedSubview(childView, at: min(index, stack.arrangedSubviews.count))
             } else {
                 let siblingViews = parent.children.compactMap(\.view).filter { $0 !== childView }
@@ -106,6 +118,7 @@ public final class NativeBridge: NSObject, NativeBridgeExports {
                 }
                 pinToContainerIfNeeded(childView, parent: parent)
             }
+            refreshLayoutAfterInsertion(child)
             return true
         }
     }
@@ -122,7 +135,9 @@ public final class NativeBridge: NSObject, NativeBridgeExports {
         perform(false) {
             let node = try requireNode(nodeID)
             if let field = node.view as? NSTextField {
+                node.rawText = value
                 field.stringValue = value
+                refreshTextAppearance(node)
             } else if let button = node.view as? NSButton {
                 button.title = value
             } else {
@@ -210,6 +225,12 @@ public final class NativeBridge: NSObject, NativeBridgeExports {
         }
     }
 
+    func setNativeState(nodeID: Int, state: String, active: Bool) {
+        guard let node = nodes[nodeID] else { return }
+        if active { node.activeStates.insert(state) } else { node.activeStates.remove(state) }
+        refreshStateAppearance(node)
+    }
+
     private func allocateID() -> Int {
         defer { nextID += 1 }
         return nextID
@@ -236,7 +257,8 @@ public final class NativeBridge: NSObject, NativeBridgeExports {
         if let parent = node.parent {
             parent.children.removeAll { $0 === node }
             if removeView, let view = node.view {
-                if let stack = view.superview as? NSStackView { stack.removeArrangedSubview(view) }
+                if let stack = view.superview as? NativeStackView { stack.removeNativeArrangedSubview(view) }
+                else if let stack = view.superview as? NSStackView { stack.removeArrangedSubview(view) }
                 view.removeFromSuperview()
             }
             node.parent = nil

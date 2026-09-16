@@ -20,7 +20,7 @@
     "demo:vue:package": "npm run package --workspace @native-vue-macos/vuejs-homepage",
     "test": "npm run test:ts && node scripts/swift-test.mjs",
     "test:ts": "vitest run",
-    "typecheck": "tsc -b packages/runtime packages/compiler examples/showcase examples/vuejs-homepage",
+    "typecheck": "tsc -b packages/style-schema packages/runtime packages/compiler examples/showcase examples/vuejs-homepage",
     "clean": "node scripts/clean.mjs"
   },
   "devDependencies": {
