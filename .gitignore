@@ -4,4 +4,5 @@ dist/
 .build/
 native/.build/
 *.xcuserstate
+*.tsbuildinfo
 .DS_Store
