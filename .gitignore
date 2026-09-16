@@ -1,0 +1,7 @@
+node_modules/
+.native-vue/
+dist/
+.build/
+native/.build/
+*.xcuserstate
+.DS_Store

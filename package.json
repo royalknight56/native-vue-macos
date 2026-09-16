@@ -1,0 +1,29 @@
+{
+  "name": "native-vue-macos",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "engines": {
+    "node": ">=20",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "build": "npm run build --workspace @native-vue-macos/showcase",
+    "dev": "npm run dev --workspace @native-vue-macos/showcase",
+    "package": "npm run build && node scripts/package-app.mjs",
+    "test": "npm run test:ts && node scripts/swift-test.mjs",
+    "test:ts": "vitest run",
+    "typecheck": "tsc -b packages/runtime packages/compiler examples/showcase",
+    "clean": "node scripts/clean.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.1"
+  }
+}
